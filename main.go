@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
 	"net"
+	"os"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
@@ -13,41 +13,48 @@ import (
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
+	"golang.org/x/exp/slog"
 )
 
 var k = koanf.New("")
 var interval time.Duration
+var logger *slog.Logger
 
 func main() {
+	logger = slog.Default()
+
 	err := k.Load(env.Provider("ADU_", "", nil), nil)
 	if err != nil {
-		log.Fatalln("error loading config from enviroment variables:", err)
+		logger.Error("error loading config from environment variables:", err)
+		os.Exit(1)
 	}
 
 	if err := k.Load(file.Provider(k.String("ADU_SECRETS_PATH")), toml.Parser()); err != nil {
-		log.Fatalln("error loading config from file:", err)
+		logger.Error("error loading config from file:", err)
+		os.Exit(1)
 	}
 
 	interval, err = time.ParseDuration(k.String("ADU_INTERVAL"))
 	if err != nil {
-		log.Fatalln("error parsing interval:", err)
+		logger.Error("error parsing interval:", err)
+		os.Exit(1)
 	}
 
 	var prevIp string
 	for {
 		ip, err := resolveOwnIp()
 		if err != nil {
-			log.Println("error resolving own ip", err)
+			logger.Debug("error resolving own ip", err)
 			continue
 		}
 
 		if ip[0] != prevIp {
 			prevIp = ip[0]
 
-			log.Printf("IP changed to %s. Updateing \n", ip[0])
+			logger.Info("IP changed", slog.String("ip", ip[0]))
 			for _, set := range k.Strings("AZURE_DNS_RECORDS") {
 				if !updateDns(&ip[0], set) {
-					log.Println("update failed. Will retry next run")
+					logger.Error("update failed. Will retry next run")
 					prevIp = ""
 				}
 			}
@@ -58,7 +65,7 @@ func main() {
 }
 
 func resolveOwnIp() (addr []string, err error) {
-	log.Println("checking for own ip")
+	logger.Debug("checking for own ip")
 	r := &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -73,16 +80,16 @@ func resolveOwnIp() (addr []string, err error) {
 }
 
 func updateDns(ip *string, recordSetName string) bool {
-	log.Println("updateing recordset", recordSetName)
+	logger.Info("updateing recordset", slog.String("recordset", recordSetName))
 	cred, err := azidentity.NewClientSecretCredential(k.String("AZURE_TENANT_ID"), k.String("AZURE_CLIENT_ID"), k.String("AZURE_CLIENT_SECRET"), nil)
 	if err != nil {
-		log.Println("Azure crendetials error", err)
+		logger.Error("Azure crendetials error", err)
 		return false
 	}
 
 	client, err := armdns.NewRecordSetsClient(k.String("AZURE_SUBSCRIPTION_ID"), cred, nil)
 	if err != nil {
-		log.Println("Azure DNS client error", err)
+		logger.Error("Azure DNS client error", err)
 		return false
 	}
 
@@ -100,7 +107,7 @@ func updateDns(ip *string, recordSetName string) bool {
 		&armdns.RecordSetsClientUpdateOptions{IfMatch: nil})
 
 	if err != nil {
-		log.Println("Azure DNS update error", err)
+		logger.Error("Azure DNS update error", err)
 		return false
 	}
 

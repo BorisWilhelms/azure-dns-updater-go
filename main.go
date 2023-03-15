@@ -44,7 +44,7 @@ func main() {
 	for {
 		ip, err := resolveOwnIp()
 		if err != nil {
-			logger.Debug("error resolving own ip", err)
+			logger.Error("error resolving own ip", err)
 			continue
 		}
 

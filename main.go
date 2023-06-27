@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
@@ -22,24 +23,23 @@ var logger *slog.Logger
 
 func main() {
 	logger = slog.Default()
-
-	err := k.Load(env.Provider("ADU_", "", nil), nil)
+	err := k.Load(env.Provider("", "", nil), nil)
 	if err != nil {
 		logger.Error("error loading config from environment variables:", err)
 		os.Exit(1)
 	}
 
-	if err := k.Load(file.Provider(k.String("ADU_SECRETS_PATH")), toml.Parser()); err != nil {
+	if err := k.Load(file.Provider(k.String("SECRETS_PATH")), toml.Parser()); err != nil {
 		logger.Error("error loading config from file:", err)
 		os.Exit(1)
 	}
 
-	interval, err = time.ParseDuration(k.String("ADU_INTERVAL"))
+	interval, err = time.ParseDuration(k.String("INTERVAL"))
 	if err != nil {
 		logger.Error("error parsing interval:", err)
 		os.Exit(1)
 	}
-
+	var records = strings.Split(k.String("AZURE_DNS_RECORDS"), ",")
 	var prevIp string
 	for {
 		ip, err := resolveOwnIp()
@@ -52,7 +52,7 @@ func main() {
 			prevIp = ip[0]
 
 			logger.Info("IP changed", slog.String("ip", ip[0]))
-			for _, set := range k.Strings("AZURE_DNS_RECORDS") {
+			for _, set := range records {
 				if !updateDns(&ip[0], set) {
 					logger.Error("update failed. Will retry next run")
 					prevIp = ""

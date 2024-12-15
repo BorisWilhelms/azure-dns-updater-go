@@ -10,7 +10,7 @@ COPY . ./
 
 RUN go build .
 
-FROM alpine:3.17 as runtime
+FROM alpine:3.17 AS runtime
 
 RUN adduser --disabled-password --no-create-home app
 

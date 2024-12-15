@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
-	"net"
+	"net/http"
 	"os"
 	"strings"
 	"time"
+	"io/ioutil"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -48,12 +49,12 @@ func main() {
 			continue
 		}
 
-		if ip[0] != prevIp {
-			prevIp = ip[0]
+		if ip != prevIp {
+			prevIp = ip
 
-			logger.Info("IP changed", slog.String("ip", ip[0]))
+			logger.Info("IP changed", slog.String("ip", ip))
 			for _, set := range records {
-				if !updateDns(&ip[0], set) {
+				if !updateDns(&ip, set) {
 					logger.Error("update failed. Will retry next run")
 					prevIp = ""
 				}
@@ -64,19 +65,18 @@ func main() {
 	}
 }
 
-func resolveOwnIp() (addr []string, err error) {
+func resolveOwnIp() (addr string, err error) {
 	logger.Debug("checking for own ip")
-	r := &net.Resolver{
-		PreferGo: true,
-		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			d := net.Dialer{
-				Timeout: time.Millisecond * time.Duration(10000),
-			}
-			return d.DialContext(ctx, "udp", "resolver4.opendns.com:53")
-		},
+	req, err := http.Get("https://ifconfig.me")
+	if err != nil {
+		return "", err
 	}
-
-	return r.LookupHost(context.Background(), "myip.opendns.com")
+	defer req.Body.Close()
+	body, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
 }
 
 func updateDns(ip *string, recordSetName string) bool {

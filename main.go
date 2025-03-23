@@ -195,7 +195,7 @@ func (u *DNSUpdater) checkAndUpdate(ctx context.Context) error {
 func (u *DNSUpdater) resolvePublicIP(ctx context.Context) (string, error) {
 	u.logger.Debug("checking for public IP")
 	
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://ifconfig.me", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://ifconfig.me/ip", nil)
 	if err != nil {
 		return "", err
 	}

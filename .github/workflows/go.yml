@@ -51,4 +51,4 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/boriswilhelms/azure-dns-updater-go:latest
-          platforms: linux/arm64 linux/amd64
+          platforms: linux/arm64,linux/amd64
